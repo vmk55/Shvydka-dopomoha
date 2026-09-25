@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Негайний порадник</title>
+<style>
+  :root{
+    --bg:#0f1620; --panel:#182233; --panel2:#1f2c40;
+    --text:#eef2f7; --muted:#9fb0c3;
+    --red:#e5484d; --red-bg:#3a1518;
+    --orange:#f5a524; --orange-bg:#3a2a0f;
+    --green:#3ecf8e; --green-bg:#0f3626;
+    --accent:#4f8cff; --border:#2a3a52;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:var(--bg);z-index:5;}
+  header h1{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:8px;}
+  .badge{font-size:11px;background:var(--orange-bg);color:var(--orange);
+    border:1px solid var(--orange);padding:2px 8px;border-radius:10px;}
+  .callbar{display:flex;gap:8px;margin-top:8px;}
+  .callbtn{flex:1;text-align:center;padding:10px 0;border-radius:10px;
+    text-decoration:none;font-weight:700;font-size:15px;}
+  .call103{background:var(--red-bg);color:var(--red);border:1px solid var(--red);}
+  .call112{background:var(--panel2);color:var(--text);border:1px solid var(--border);}
+  main{flex:1;padding:16px;padding-bottom:100px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
+    padding:16px;margin-bottom:14px;}
+  .qtext{font-size:19px;line-height:1.4;font-weight:600;margin:0 0 6px;}
+  .note{color:var(--muted);font-size:14px;margin:0 0 10px;line-height:1.4;}
+  .opts{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
+  .opt{padding:14px;border-radius:12px;border:1px solid var(--border);
+    background:var(--panel2);color:var(--text);font-size:16px;text-align:left;
+    cursor:pointer;}
+  .opt:active{opacity:.7;}
+  .opt.unknown{border-style:dashed;color:var(--muted);}
+  .outcome{border-radius:14px;padding:18px;margin-bottom:14px;}
+  .outcome.emergency{background:var(--red-bg);border:1px solid var(--red);}
+  .outcome.urgent{background:var(--orange-bg);border:1px solid var(--orange);}
+  .outcome.green{background:var(--green-bg);border:1px solid var(--green);}
+  .outcome h2{margin:0 0 10px;font-size:19px;}
+  .outcome.emergency h2{color:var(--red);}
+  .outcome.urgent h2{color:var(--orange);}
+  .outcome.green h2{color:var(--green);}
+  .outcome ul{margin:6px 0 12px;padding-left:20px;}
+  .outcome li{margin-bottom:6px;line-height:1.4;}
+  .section-label{font-size:12px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--muted);margin:14px 0 4px;}
+  .disclaimer{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.4;}
+  .navrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+  .navbtn{padding:11px 14px;border-radius:10px;border:1px solid var(--border);
+    background:var(--panel2);color:var(--text);font-size:14px;cursor:pointer;}
+  .navbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+  footer{position:fixed;bottom:0;left:0;right:0;background:var(--bg);
+    border-top:1px solid var(--border);padding:10px 16px;
+    max-width:520px;margin:0 auto;display:flex;gap:8px;z-index:5;}
+  .worsen{flex:1;padding:13px;border-radius:12px;border:1px solid var(--red);
+    background:var(--red-bg);color:var(--red);font-weight:700;font-size:14px;}
+  .homebtn{padding:13px 16px;border-radius:12px;border:1px solid var(--border);
+    background:var(--panel2);color:var(--muted);font-size:14px;}
+  .menugrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+  .menugrid .opt{text-align:center;font-size:14px;padding:14px 8px;}
+  .backrow{margin-bottom:10px;}
+  .backbtn{background:none;border:none;color:var(--muted);font-size:14px;
+    padding:6px 0;cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🚨 Негайний порадник <span class="badge">робоча версія · не валідовано медично</span></h1>
+    <div class="callbar">
+      <a class="callbtn call103" href="tel:103">📞 103</a>
+      <a class="callbtn call112" href="tel:112">📞 112</a>
+    </div>
+  </header>
+  <main id="main"></main>
+  <footer id="footer" style="display:none;">
+    <button class="worsen" id="worsenBtn">⚠️ СТАН ПОГІРШИВСЯ</button>
+    <button class="homebtn" id="homeBtn">На початок</button>
+  </footer>
+</div>
+
+<script>
+/* =========================================================
+   ДАНІ: питання/дії (FLOW) — окремо від рушія (медична матриця)
+   Кожен вузол:
+   { type:'q', text, note, options:[{label,next}] }
+   { type:'end', level:'emergency'|'urgent'|'green', title, call:true/false,
+     doNow:[...], doNot:[...], monitor:[...] }
+   ========================================================= */
+const PRIMARY_ENTRY = 'A1';
+const MENU_ENTRY = 'MENU';
+
+const YN = (yes, no, unknown, cannot) => [
+  {label:'Так', next:yes},
+  {label:'Ні', next:no},
+  {label:'Не знаю', next:unknown, cls:'unknown'},
+  {label:'Не можу перевірити', next:cannot || unknown, cls:'unknown'}
+];
+
+const FLOW = {
+
+  // ---------- СТАРТ ----------
+  START:{type:'q', text:'Хто потребує допомоги?', options:[
+    {label:'Я', next:'Q01'},
+    {label:'Інший дорослий', next:'Q01'},
+    {label:'Дитина', next:'CHI1'},
+    {label:'Немовля', next:'INF1'},
+    {label:'Людина не може відповідати', next:'OBS1'},
+    {label:'Не знаю', next:'OBS1'}
+  ]},
+
+  Q01:{type:'q', text:'Чи може людина нормально говорити та виконувати прості прохання?',
+    options:[
+      {label:'Так', next:PRIMARY_ENTRY},
+      {label:'Ні', next:'OBS1'},
+      {label:'Не знаю', next:'CHECK_RESPONSE', cls:'unknown'},
+      {label:'Не можу перевірити', next:'CHECK_RESPONSE', cls:'unknown'}
+    ]},
+
+  CHECK_RESPONSE:{type:'q',
+    text:'Перевірте реакцію',
+    note:'Зверніться до людини. Запитайте: «Як Вас звати?» або попросіть виконати просту дію (наприклад, потиснути руку).',
+    options:[
+      {label:'Відповідає нормально', next:PRIMARY_ENTRY},
+      {label:'Не відповідає', next:'OBS_BREATH'},
+      {label:'Відповідає дивно / неадекватно', next:'END_ALTERED_MENTAL'},
+      {label:'Не можу перевірити', next:'OBS1'}
+    ]},
+
+  END_ALTERED_MENTAL:{type:'end', level:'emergency', call:true,
+    title:'Можлива гостра зміна свідомості',
+    doNow:[
+      'Не залишайте людину саму.',
+      'Перевірте дихання (чи піднімається грудна клітка, чи чутні нормальні вдихи).',
+      'Якщо є блювання — поверніть людину на бік, щоб уникнути потрапляння блювотних мас у дихальні шляхи.',
+      'Зафіксуйте час, коли Ви помітили зміну стану.'
+    ],
+    doNot:['Не давайте їжу, воду або ліки.', 'Не залишайте без нагляду.'],
+    monitor:['Дихання', 'Свідомість', 'Колір губ/шкіри']},
+
+  // ---------- РЕЖИМ СПОСТЕРІГАЧА (людина не може відповідати) ----------
+  OBS1:{type:'q', text:'Людина реагує на голос або дотик (плескання по плечу)?',
+    options: YN('OBS_BREATH','OBS_BREATH','OBS_BREATH')},
+
+  OBS_BREATH:{type:'q', text:'Подивіться на грудну клітку. Людина дихає?',
+    note:'Спостерігайте кілька секунд.',
+    options: YN('OBS_BREATH_NORMAL','END_CPR','END_CPR','END_CPR')},
+
+  OBS_BREATH_NORMAL:{type:'q', text:'Дихання виглядає нормальним (не рідке, не хрипке, не утруднене)?',
+    options: YN('OBS_BLEED','END_BREATHING_EMERGENCY','OBS_BLEED','OBS_BLEED')},
+
+  OBS_BLEED:{type:'q', text:'Є видима сильна кровотеча?',
+    options: YN('END_BLEEDING','OBS_SEIZURE','OBS_SEIZURE','OBS_SEIZURE')},
+
+  OBS_SEIZURE:{type:'q', text:'Є судоми зараз або зафіксовано, що вони щойно були?',
+    options: YN('END_SEIZURE_NOW','OBS_SWELL','OBS_SWELL','OBS_SWELL')},
+
+  OBS_SWELL:{type:'q', text:'Є набряк горла/язика, висип по всьому тілу або відомо про алергію?',
+    options: YN('END_ANAPHYLAXIS','OBS_TRAUMA','OBS_TRAUMA','OBS_TRAUMA')},
+
+  OBS_TRAUMA:{type:'q', text:'Є очевидна тяжка травма (падіння з висоти, ДТП, сильна деформація кінцівки)?',
+    options: YN('END_TRAUMA','END_UNCONSCIOUS','OBS1B','OBS1B')},
+
+  OBS1B:{type:'end', level:'emergency', call:true,
+    title:'Людина не реагує нормально',
+    doNow:[
+      'Викличте допомогу негайно.',
+      'Залишайтеся поруч, продовжуйте спостерігати за диханням.',
+      'Якщо дихання зупиниться або стане ненормальним — почніть непрямий масаж серця (СЛР), якщо вмієте.'
+    ],
+    doNot:['Не залишайте людину саму.'],
+    monitor:['Дихання', 'Реакція', 'Колір шкіри/губ']},
+
+  // ---------- PRIMARY: A — дихальні шляхи ----------
+  A1:{type:'q', text:'Людина може нормально говорити або видавати звуки?',
+    options: YN('B1','A2','CHECK_AIRWAY','CHECK_AIRWAY')},
+
+  A2:{type:'q', text:'Людина може вдихнути (не задихається, не хапає ротом повітря беззвучно)?',
+    options: YN('B1','END_CHOKING','CHECK_AIRWAY','CHECK_AIRWAY')},
+
+  CHECK_AIRWAY:{type:'q', text:'Перевірте дихальні шляхи',
+    note:'Подивіться, чи є щось у роті, що заважає диханню (їжа, блювотні маси, сторонній предмет).',
+    options:[
+      {label:'Шляхи вільні, людина дихає', next:'B1'},
+      {label:'Є перешкода / людина задихається', next:'END_CHOKING'},
+      {label:'Не можу перевірити', next:'B1', cls:'unknown'}
+    ]},
+
+  // ---------- B — дихання ----------
+  B1:{type:'q', text:'Людина нормально дихає?',
+    options: YN('C1','END_BREATHING_EMERGENCY','CHECK_BREATHING','CHECK_BREATHING')},
+
+  CHECK_BREATHING:{type:'q', text:'Перевірте дихання',
+    note:'Подивіться на грудну клітку. Чи піднімається вона? Чи є нормальні вдихи протягом кількох секунд?',
+    options:[
+      {label:'Дихання нормальне', next:'C1'},
+      {label:'Дуже утруднене / ненормальне', next:'END_BREATHING_EMERGENCY'},
+      {label:'Не дихає', next:'END_CPR'},
+      {label:'Не можу перевірити', next:'OBS1B', cls:'unknown'}
+    ]},
+
+  // ---------- C — кровотеча ----------
+  C1:{type:'q', text:'Є сильна зовнішня кровотеча?',
+    options: YN('END_BLEEDING','D1','CHECK_BLEEDING','CHECK_BLEEDING')},
+
+  CHECK_BLEEDING:{type:'q', text:'Перевірте наявність кровотечі',
+    note:'Огляньте одяг та тіло людини на предмет крові, що швидко просочується або накопичується.',
+    options:[
+      {label:'Кровотечі не виявлено', next:'D1'},
+      {label:'Виявлено сильну кровотечу', next:'END_BLEEDING'},
+      {label:'Не можу перевірити', next:'D1', cls:'unknown'}
+    ]},
+
+  // ---------- D — неврологія ----------
+  D1:{type:'q', text:'Раптово виникла слабкість або оніміння руки чи ноги (особливо з одного боку)?',
+    options: YN('END_STROKE','D2','CHECK_NEURO','D2')},
+
+  D2:{type:'q', text:'Раптово змінилася мова (незрозуміла, плутана)?',
+    options: YN('END_STROKE','D3','D3','D3')},
+
+  D3:{type:'q', text:'Раптово перекосило обличчя (асиметрія при посмішці)?',
+    options: YN('END_STROKE','D4','D4','D4')},
+
+  D4:{type:'q', text:'Була раптова втрата свідомості або судоми щойно?',
+    options:[
+      {label:'Втрата свідомості', next:'OBS_BREATH'},
+      {label:'Судоми', next:'END_SEIZURE_NOW'},
+      {label:'Ні', next:'E1'},
+      {label:'Не знаю', next:'E1', cls:'unknown'}
+    ]},
+
+  CHECK_NEURO:{type:'q', text:'Проста перевірка',
+    note:'Попросіть людину посміхнутися та підняти обидві руки одночасно.',
+    options:[
+      {label:'Все симетрично, без відхилень', next:'D2'},
+      {label:'Є асиметрія / слабкість', next:'END_STROKE'},
+      {label:'Не можу перевірити', next:'D2', cls:'unknown'}
+    ]},
+
+  // ---------- E — інші очевидні загрози ----------
+  E1:{type:'q', text:'Чи є очевидна тяжка травма, сильний набряк горла/язика, важка алергічна реакція, отруєння, утоплення або інша ситуація, яка виглядає небезпечною?',
+    options:[
+      {label:'Тяжка травма', next:'END_TRAUMA'},
+      {label:'Набряк горла/язика або алергія', next:'END_ANAPHYLAXIS'},
+      {label:'Можливе отруєння', next:'PO1'},
+      {label:'Нічого з цього', next:'MENU'},
+      {label:'Не знаю', next:'MENU', cls:'unknown'}
+    ]},
+
+  // ---------- ГОЛОВНЕ МЕНЮ ----------
+  MENU:{type:'menu', text:'Оберіть, що турбує найбільше', options:[
+    {label:'Важко дихати', next:'BR1'},
+    {label:'Біль у грудях', next:'CP1'},
+    {label:'Кровотеча', next:'C1'},
+    {label:'Слабкість / мова / обличчя', next:'D1'},
+    {label:'Судоми', next:'SZ1'},
+    {label:'Алергія', next:'AN1'},
+    {label:'Травма', next:'TR1'},
+    {label:'Опік', next:'BRN1'},
+    {label:'Отруєння', next:'PO1'},
+    {label:'Укус / ужалення', next:'BI1'},
+    {label:'Головний біль', next:'HD1'},
+    {label:'Біль у животі', next:'ABD1'},
+    {label:'Блювання', next:'VO1'},
+    {label:'Температура', next:'FE1'},
+    {label:'Не знаю, що саме — просто дуже погано', next:'UNK1'}
+  ]},
+
+  // ---------- BR-01 — утруднене дихання ----------
+  BR1:{type:'q', text:'Чи важко людині дихати зараз?', options: YN('BR2','MENU','BR2','BR2')},
+  BR2:{type:'q', text:'Людина не може нормально говорити через задишку (лише окремі слова)?',
+    options: YN('END_BREATHING_EMERGENCY','BR3','BR3','BR3')},
+  BR3:{type:'q', text:'Є синюшність губ/обличчя, різке погіршення, непритомність або сильна слабкість?',
+    options: YN('END_BREATHING_EMERGENCY','BR4','BR4','BR4')},
+  BR4:{type:'q', text:'Стан швидко погіршується?',
+    options: YN('END_BREATHING_EMERGENCY','END_BREATHING_URGENT','END_BREATHING_URGENT','END_BREATHING_URGENT')},
+
+  // ---------- CP-01 — біль у грудях ----------
+  CP1:{type:'q', text:'Біль виник раптово?', options: YN('CP2','CP2','CP2','CP2')},
+  CP2:{type:'q', text:'Є задишка разом із болем?', options: YN('END_CHEST_EMERGENCY','CP3','CP3','CP3')},
+  CP3:{type:'q', text:'Є холодний піт, сильна слабкість, нудота або майже непритомність?',
+    options: YN('END_CHEST_EMERGENCY','CP4','CP4','CP4')},
+  CP4:{type:'q', text:'Біль дуже сильний або посилюється?',
+    options: YN('END_CHEST_EMERGENCY','END_CHEST_URGENT','END_CHEST_URGENT','END_CHEST_URGENT')},
+
+  // ---------- ST — інсульт (вхід із меню, якщо минули D1 без спрацювання) ----------
+  // (D1-D4 вже покривають інсульт-подібні симптоми)
+
+  // ---------- SZ-01 — судоми ----------
+  SZ1:{type:'q', text:'Судоми відбуваються прямо зараз?', options: YN('END_SEIZURE_NOW','SZ2','SZ2','SZ2')},
+  SZ2:{type:'q', text:'Після судом людина не приходить до нормальної свідомості (минуло понад кілька хвилин)?',
+    options: YN('END_SEIZURE_EMERGENCY','END_SEIZURE_URGENT','END_SEIZURE_URGENT','END_SEIZURE_URGENT')},
+
+  // ---------- AN-01 — алергія ----------
+  AN1:{type:'q', text:'Є набряк язика, губ або горла?', options: YN('END_ANAPHYLAXIS','AN2','AN2','AN2')},
+  AN2:{type:'q', text:'Є утруднене дихання або зміна голосу (хрипкість)?', options: YN('END_ANAPHYLAXIS','AN3','AN3','AN3')},
+  AN3:{type:'q', text:'Є висип по тілу разом зі слабкістю, запамороченням або іншими системними симптомами?',
+    options: YN('END_ANAPHYLAXIS','END_ALLERGY_MILD','END_ALLERGY_MILD','END_ALLERGY_MILD')},
+
+  // ---------- TR-01 — травма ----------
+  TR1:{type:'q', text:'Є сильна кровотеча?', options: YN('END_BLEEDING','TR2','TR2','TR2')},
+  TR2:{type:'q', text:'Є втрата свідомості, порушення дихання або неврологічні симптоми (слабкість, дивна мова)?',
+    options: YN('END_TRAUMA','TR3','TR3','TR3')},
+  TR3:{type:'q', text:'Могла бути травма голови, шиї або хребта (падіння, удар головою, ДТП, пірнання)?',
+    options: YN('END_SPINE_TRAUMA','TR4','TR4','TR4')},
+  TR4:{type:'q', text:'Є очевидний перелом або тяжке ушкодження кінцівки (деформація, неможливість опори)?',
+    options: YN('END_FRACTURE','END_MINOR_TRAUMA','END_MINOR_TRAUMA','END_MINOR_TRAUMA')},
+
+  // ---------- BRN-01 — опік ----------
+  BRN1:{type:'q', text:'Це хімічний або електричний опік?', options:[
+    {label:'Хімічний', next:'END_CHEMICAL_BURN'},
+    {label:'Електричний', next:'END_ELECTRIC_BURN'},
+    {label:'Ні, термічний (вогонь/окріп/пара)', next:'BRN2'}
+  ]},
+  BRN2:{type:'q', text:'Опік великий (більше долоні людини), глибокий (пухирі, білий/чорний колір шкіри) або на обличчі, руках, паху, суглобах?',
+    options: YN('END_BURN_EMERGENCY','END_BURN_MINOR','END_BURN_MINOR','END_BURN_MINOR')},
+
+  // ---------- PO-01 — отруєння ----------
+  PO1:{type:'q', text:'Відомо або є підозра, що людина прийняла надмірну кількість речовини, ліків, алкоголю чи хімікату?',
+    options: YN('PO2','MENU','PO2','PO2')},
+  PO2:{type:'q', text:'Є порушення свідомості, дуже сонливий стан, ненормальне дихання або судоми?',
+    options: YN('END_POISONING_EMERGENCY','END_POISONING_URGENT','END_POISONING_URGENT','END_POISONING_URGENT')},
+
+  // ---------- BI-01 — укус/ужалення ----------
+  BI1:{type:'q', text:'Є утруднене дихання або набряк язика/горла після укусу/ужалення?',
+    options: YN('END_ANAPHYLAXIS','BI2','BI2','BI2')},
+  BI2:{type:'q', text:'Швидко поширюється набряк, є виражена слабкість, запаморочення або висип по тілу?',
+    options: YN('END_BITE_URGENT','END_BITE_MILD','END_BITE_MILD','END_BITE_MILD')},
+
+  // ---------- HD-01 — головний біль ----------
+  HD1:{type:'q', text:'Головний біль виник раптово і є дуже сильним ("найгірший у житті")?',
+    options: YN('HD2','HD3','HD3','HD3')},
+  HD2:{type:'q', text:'Є порушення свідомості, мови, рухів, зору, судоми або інша неврологічна ознака?',
+    options: YN('END_NEURO_EMERGENCY','END_HEADACHE_URGENT','END_HEADACHE_URGENT','END_HEADACHE_URGENT')},
+  HD3:{type:'q', text:'Біль незвичайний для цієї людини або дуже швидко посилюється?',
+    options: YN('END_HEADACHE_URGENT','END_GREEN_GENERIC','END_HEADACHE_URGENT','END_HEADACHE_URGENT')},
+
+  // ---------- ABD-01 — живіт ----------
+  ABD1:{type:'q', text:'Біль дуже сильний або виник раптово?', options: YN('ABD2','ABD3','ABD2','ABD2')},
+  ABD2:{type:'q', text:'Є непритомність, сильна слабкість, кровотеча або кров у блювоті/випорожненнях?',
+    options: YN('END_ABD_EMERGENCY','ABD3','ABD3','ABD3')},
+  ABD3:{type:'q', text:'Є багаторазове блювання, висока температура або швидке погіршення?',
+    options: YN('END_ABD_URGENT','END_GREEN_GENERIC','END_ABD_URGENT','END_ABD_URGENT')},
+
+  // ---------- VO-01 — блювання ----------
+  VO1:{type:'q', text:'Є кров у блювоті або блювота схожа на кавову гущу?', options: YN('END_VOMIT_EMERGENCY','VO2','VO2','VO2')},
+  VO2:{type:'q', text:'Людина не може утримувати рідину або швидко слабшає?', options: YN('END_VOMIT_URGENT','VO3','VO3','VO3')},
+  VO3:{type:'q', text:'Є сильний біль, непритомність або сплутаність свідомості?',
+    options: YN('END_VOMIT_EMERGENCY','END_VOMIT_HOME','END_VOMIT_HOME','END_VOMIT_HOME')},
+
+  // ---------- FE-01 — температура ----------
+  FE1:{type:'q', text:'Є порушення свідомості, судоми, утруднене дихання, виражена слабкість або швидке погіршення разом із температурою?',
+    options: YN('END_FEVER_EMERGENCY','END_FEVER_HOME','END_FEVER_EMERGENCY','END_FEVER_HOME')},
+
+  // ---------- CHI-01 — дитина ----------
+  CHI1:{type:'q', text:'Дитина реагує нормально (плаче, реагує на голос/дотик)?', options: YN('CHI2','END_CHILD_EMERGENCY','END_CHILD_EMERGENCY','END_CHILD_EMERGENCY')},
+  CHI2:{type:'q', text:'Дитині важко дихати?', options: YN('END_CHILD_EMERGENCY','CHI3','CHI3','CHI3')},
+  CHI3:{type:'q', text:'Є судоми?', options: YN('END_CHILD_EMERGENCY','CHI4','CHI4','CHI4')},
+  CHI4:{type:'q', text:'Дитина незвичайно млява або її важко розбудити?', options: YN('END_CHILD_EMERGENCY','CHI5','CHI5','CHI5')},
+  CHI5:{type:'q', text:'Дитина не може пити/ковтати?', options: YN('END_CHILD_URGENT','MENU','CHI5B','CHI5B')},
+  CHI5B:{type:'end', level:'urgent', call:false, title:'Потрібна медична оцінка дитини',
+    doNow:['Зверніться до лікаря або невідкладної допомоги найближчим часом.','Продовжуйте спостерігати за диханням, свідомістю та кольором шкіри.'],
+    doNot:[], monitor:['Дихання','Свідомість','Температура','Здатність пити']},
+
+  // ---------- INF-01 — немовля ----------
+  INF1:{type:'q', text:'Немовля реагує, рухається, плаче нормально?', options: YN('INF2','END_INFANT_EMERGENCY','END_INFANT_EMERGENCY','END_INFANT_EMERGENCY')},
+  INF2:{type:'q', text:'Є утруднене дихання, синюшність, судоми, багаторазове блювання або відмова від годування?',
+    options: YN('END_INFANT_EMERGENCY','END_INFANT_URGENT','END_INFANT_URGENT','END_INFANT_URGENT')},
+
+  // ---------- UNK-01 — «дуже погано, не знаю чому» ----------
+  UNK1:{type:'q', text:'Зараз є хоч якась з ознак: утруднене дихання, сильна кровотеча, сильний біль, раптова слабкість, порушення мови, судоми, набряк горла, підозра на отруєння чи травму?',
+    options:[
+      {label:'Так, є одна або декілька', next:PRIMARY_ENTRY},
+      {label:'Ні', next:'END_GREEN_GENERIC'},
+      {label:'Не знаю', next:PRIMARY_ENTRY, cls:'unknown'}
+    ]},
+
+  // ================= ТЕРМІНАЛЬНІ ЕКРАНИ =================
+  END_CHOKING:{type:'end', level:'emergency', call:true, title:'Можливе удушення чужорідним тілом',
+    doNow:['Якщо людина кашляє — заохочуйте кашляти далі, не втручайтесь.',
+      'Якщо не може кашляти/говорити/дихати — виконайте прийом Геймліха (черевні поштовхи), якщо володієте технікою, або удари між лопатками.',
+      'Дійте за окремим віковим алгоритмом (дорослий/дитина/немовля відрізняються).'],
+    doNot:['Не намагайтеся дістати предмет пальцем наосліп.'],
+    monitor:['Здатність дихати/кашляти/говорити']},
+
+  END_BREATHING_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Тяжке порушення дихання',
+    doNow:['Допоможіть людині сісти у зручне для дихання положення (зазвичай напівсидячи).',
+      'Послабте тісний одяг навколо шиї та грудей.','Заспокойте людину, говоріть спокійно.'],
+    doNot:['Не залишайте людину саму.','Не давайте їжу чи воду.'],
+    monitor:['Колір губ/обличчя','Здатність говорити','Свідомість']},
+
+  END_BREATHING_URGENT:{type:'end', level:'urgent', call:false, title:'Утруднене дихання, що потребує оцінки',
+    doNow:['Допоможіть прийняти зручне положення для дихання.','Зверніться по медичну оцінку найближчим часом.'],
+    doNot:[], monitor:['Задишка, синюшність, погіршення мовлення — за появи будь-якого дзвоніть 103/112']},
+
+  END_CPR:{type:'end', level:'emergency', call:true, title:'Людина не дихає нормально',
+    doNow:['Негайно телефонуйте 103/112.','Якщо володієте технікою — почніть непрямий масаж серця (натискання на середину грудної клітки, часто й глибоко).',
+      'Якщо є дефібрилятор (АЗД) поруч — використайте за інструкцією на пристрої.'],
+    doNot:['Не залишайте людину без допомоги, доки не приїде бригада.'],
+    monitor:['Продовжуйте до прибуття допомоги або відновлення дихання']},
+
+  END_BLEEDING:{type:'end', level:'emergency', call:true, title:'Сильна кровотеча',
+    doNow:['Сильно притисніть рану чистою тканиною або бинтом.','Не відпускайте тиск, за потреби додавайте тканину зверху.',
+      'Якщо кровотеча з кінцівки та не зупиняється тиском — за наявності навичок і турнікета розгляньте його накладання вище рани.',
+      'Підніміть кінцівку вище рівня серця, якщо це можливо і не посилює травму.'],
+    doNot:['Не знімайте тканину, що вже просякла кров\'ю — додавайте нову зверху.'],
+    monitor:['Свідомість, колір шкіри, наскільки промокає пов\'язка']},
+
+  END_STROKE:{type:'end', level:'emergency', call:true, title:'Можливий гострий інсульт',
+    doNow:['Зафіксуйте точний час, коли з\'явилися симптоми (або коли людину востаннє бачили нормальною) — це критично важливо для лікарів.',
+      'Заспокойте людину, допоможіть зручно сісти або лягти.','Не давайте їжу, воду або ліки.'],
+    doNot:['Не давайте їсти/пити (ризик порушення ковтання).'],
+    monitor:['Мова, симетрія обличчя, рухи рук — за посиланням часу дзвінка']},
+
+  END_UNCONSCIOUS:{type:'end', level:'emergency', call:true, title:'Втрата свідомості',
+    doNow:['Перевірте дихання.','Якщо дихає нормально — покладіть у стабільне бокове положення.','Залишайтесь поруч до прибуття допомоги.'],
+    doNot:['Не залишайте саму, якщо дихання нестабільне.'],
+    monitor:['Дихання, реакція']},
+
+  END_CHEST_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Можлива гостра серцева подія',
+    doNow:['Допоможіть людині сісти у зручне положення, зменшіть фізичне навантаження.','Послабте тісний одяг.','Заспокойте, залишайтесь поруч.'],
+    doNot:['Не залишайте людину саму.','Не давайте їжу.'],
+    monitor:['Біль (посилюється/зменшується), дихання, свідомість']},
+
+  END_CHEST_URGENT:{type:'end', level:'urgent', call:false, title:'Біль у грудях, що потребує швидкої оцінки',
+    doNow:['Зверніться по медичну допомогу найближчим часом, навіть якщо біль слабшає.','Уникайте фізичного навантаження до огляду.'],
+    doNot:[], monitor:['Поява задишки, поту, слабкості — за появи дзвоніть 103/112 негайно']},
+
+  END_SEIZURE_NOW:{type:'end', level:'emergency', call:true, title:'Судоми зараз',
+    doNow:['Приберіть предмети, що можуть травмувати людину поруч.','Підкладіть щось м\'яке під голову.','Не стримуйте рухи силою.','Засікайте час тривалості судом.'],
+    doNot:['Не кладіть нічого в рот людини.','Не намагайтеся силою стримувати рухи.'],
+    monitor:['Тривалість судом, дихання після їх закінчення']},
+
+  END_SEIZURE_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Судоми з тривалим порушенням свідомості',
+    doNow:['Покладіть у стабільне бокове положення, якщо дихає.','Перевіряйте дихання постійно.'],
+    doNot:['Не давайте нічого через рот.'], monitor:['Свідомість, дихання']},
+
+  END_SEIZURE_URGENT:{type:'end', level:'urgent', call:false, title:'Після судом стан стабілізується',
+    doNow:['Дайте людині відпочити у безпечному місці.','Зверніться по медичну оцінку найближчим часом.'],
+    doNot:[], monitor:['Повторні судоми, тривала сплутаність — за появи дзвоніть 103/112']},
+
+  END_ANAPHYLAXIS:{type:'end', level:'emergency', call:true, title:'Можлива важка алергічна реакція (анафілаксія)',
+    doNow:['Якщо людині раніше призначено автоін\'єктор адреналіну (наприклад EpiPen) — застосуйте його згідно з офіційною інструкцією до пристрою.',
+      'Допоможіть людині лягти з піднятими ногами (якщо немає утрудненого дихання) або сісти, якщо так легше дихати.','Приберіть алерген, якщо відомий і можливо (наприклад, жало комахи).'],
+    doNot:['Не залишайте людину саму.'], monitor:['Дихання, набряк, свідомість']},
+
+  END_ALLERGY_MILD:{type:'end', level:'urgent', call:false, title:'Алергічна реакція без ознак анафілаксії',
+    doNow:['Уникайте подальшого контакту з можливим алергеном.','Зверніться по медичну консультацію.'],
+    doNot:[], monitor:['Поява набряку горла/язика, утрудненого дихання — тоді негайно 103/112']},
+
+  END_TRAUMA:{type:'end', level:'emergency', call:true, title:'Тяжка травма',
+    doNow:['Не переміщуйте людину без потреби (окрім прямої небезпеки на місці).','Зупиніть видиму сильну кровотечу тиском.','Заспокойте, укрийте від холоду.'],
+    doNot:['Не намагайтеся випрямляти деформовані кінцівки.'], monitor:['Свідомість, дихання, кровотеча']},
+
+  END_SPINE_TRAUMA:{type:'end', level:'emergency', call:true, title:'Підозра на травму голови/шиї/хребта',
+    doNow:['Тримайте голову та шию нерухомими власними руками, якщо людина при свідомості й не в небезпеці.','Не дозволяйте людині вставати чи крутити головою.'],
+    doNot:['Не переміщуйте людину, якщо немає прямої загрози життю (вогонь, вода тощо).'], monitor:['Свідомість, дихання, чутливість кінцівок']},
+
+  END_FRACTURE:{type:'end', level:'urgent', call:false, title:'Можливий перелом',
+    doNow:['Знеруште пошкоджену кінцівку в тому положенні, в якому вона є (шина з підручних засобів, якщо є навички).','Прикладіть холод через тканину, якщо доступно.','Зверніться до травмпункту.'],
+    doNot:['Не намагайтеся вправити кістку.'], monitor:['Колір, чутливість кінцівки нижче травми']},
+
+  END_MINOR_TRAUMA:{type:'end', level:'green', call:false, title:'Легка травма',
+    doNow:['Промийте та обробіть невелику рану.','Прикладіть холод при забої.','Спостерігайте за станом.'],
+    doNot:[], monitor:['Посилення болю, набряку, поява оніміння — тоді зверніться до лікаря']},
+
+  END_CHEMICAL_BURN:{type:'end', level:'emergency', call:true, title:'Хімічний опік',
+    doNow:['Промивайте уражену ділянку великою кількістю прохолодної проточної води щонайменше 15-20 хвилин.','Зніміть забруднений одяг, якщо він не прилип до шкіри.','Якщо потрапило в очі — промивайте очі водою безперервно й негайно телефонуйте 103/112.'],
+    doNot:['Не намагайтеся нейтралізувати хімікат іншою речовиною.'], monitor:['Біль, площа ураження, дихання (якщо є пари)']},
+
+  END_ELECTRIC_BURN:{type:'end', level:'emergency', call:true, title:'Електротравма',
+    doNow:['Спочатку переконайтесь, що джерело електрики вимкнене — не торкайтесь людини, поки контакт з електрикою не припинено.','Після безпечного припинення контакту перевірте дихання.'],
+    doNot:['Не торкайтесь людини під напругою голими руками.'], monitor:['Дихання, свідомість, опіки входу/виходу струму']},
+
+  END_BURN_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Великий або глибокий опік',
+    doNow:['Охолоджуйте опік прохолодною (не крижаною) проточною водою 10-20 хвилин.','Накрийте чистою неворсистою тканиною.'],
+    doNot:['Не проколюйте пухирі.','Не наносьте олію, масло чи зубну пасту.'], monitor:['Біль, ознаки шоку (блідість, слабкість)']},
+
+  END_BURN_MINOR:{type:'end', level:'green', call:false, title:'Невеликий поверхневий опік',
+    doNow:['Охолоджуйте прохолодною водою 10-20 хвилин.','Накрийте чистою пов\'язкою.'],
+    doNot:['Не проколюйте пухирі.'], monitor:['Ознаки інфекції, посилення болю — тоді зверніться до лікаря']},
+
+  END_POISONING_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Отруєння з порушенням стану',
+    doNow:['Телефонуйте 103/112 і повідомте: що саме, приблизну кількість, коли і як потрапило в організм, вік людини.','Покладіть людину в стабільне бокове положення, якщо вона непритомна, але дихає.'],
+    doNot:['Не викликайте блювання самостійно.','Не давайте їжу чи воду без вказівки медиків.'],
+    monitor:['Свідомість, дихання']},
+
+  END_POISONING_URGENT:{type:'end', level:'urgent', call:false, title:'Підозра на отруєння без гострого погіршення',
+    doNow:['Зверніться до токсикологічної/невідкладної служби, повідомивши речовину, кількість і час.','Зберіть упаковку від речовини/ліків, якщо є, для лікарів.'],
+    doNot:['Не викликайте блювання самостійно.'], monitor:['Свідомість, дихання, самопочуття']},
+
+  END_BITE_URGENT:{type:'end', level:'urgent', call:false, title:'Укус/ужалення з поширенням реакції',
+    doNow:['Прикладіть холод до місця укусу.','Зверніться по медичну оцінку найближчим часом.','Якщо є жало — обережно видаліть його, зіскрібаючи, не стискаючи.'],
+    doNot:[], monitor:['Утруднене дихання, набряк горла — тоді негайно 103/112']},
+
+  END_BITE_MILD:{type:'end', level:'green', call:false, title:'Локальна реакція на укус/ужалення',
+    doNow:['Прикладіть холод.','Спостерігайте за станом протягом години.'],
+    doNot:[], monitor:['Поширення набряку, утруднене дихання — тоді 103/112']},
+
+  END_NEURO_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Гострий неврологічний стан',
+    doNow:['Зафіксуйте час початку симптомів.','Заспокойте людину, допоможіть зручно лягти.'],
+    doNot:['Не давайте їжу/воду.'], monitor:['Свідомість, мова, рухи']},
+
+  END_HEADACHE_URGENT:{type:'end', level:'urgent', call:false, title:'Незвичайний сильний головний біль',
+    doNow:['Зверніться по медичну оцінку найближчим часом.','Дайте людині спокій у затемненому приміщенні.'],
+    doNot:[], monitor:['Порушення свідомості, мови, зору — тоді негайно 103/112']},
+
+  END_ABD_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Гострий тяжкий стан живота',
+    doNow:['Не давайте їжу чи воду.','Допоможіть прийняти зручне положення (часто — з підібганими ногами).'],
+    doNot:['Не давайте знеболювальне без консультації, це може ускладнити діагностику.'], monitor:['Свідомість, блідість, пульс']},
+
+  END_ABD_URGENT:{type:'end', level:'urgent', call:false, title:'Біль у животі, що потребує оцінки',
+    doNow:['Зверніться до лікаря найближчим часом.','Уникайте їжі до огляду, пийте невеликими ковтками воду, якщо немає блювання.'],
+    doNot:[], monitor:['Посилення болю, температура, блювання з кров\'ю — тоді 103/112']},
+
+  END_VOMIT_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Блювання з кров\'ю',
+    doNow:['Не давайте їжу чи воду.','Покладіть на бік, якщо є ризик повторного блювання.'],
+    doNot:[], monitor:['Свідомість, кількість крові']},
+
+  END_VOMIT_URGENT:{type:'end', level:'urgent', call:false, title:'Блювання з ризиком зневоднення',
+    doNow:['Пийте невеликими частими ковтками рідину, якщо блювання дозволяє.','Зверніться до лікаря, особливо якщо це дитина, літня людина або триває довго.'],
+    doNot:[], monitor:['Ознаки зневоднення, сплутаність свідомості — тоді 103/112']},
+
+  END_VOMIT_HOME:{type:'end', level:'green', call:false, title:'Блювання без тривожних ознак',
+    doNow:['Пийте рідину невеликими ковтками.','Відпочивайте, легка їжа за самопочуттям.'],
+    doNot:[], monitor:['Погіршення, кров у блювоті, сильний біль — тоді зверніться по допомогу']},
+
+  END_FEVER_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Висока температура з тривожними ознаками',
+    doNow:['Заспокойте людину, забезпечте приплив свіжого повітря, зніміть зайвий одяг.','Якщо є судоми — дійте за протоколом судом (не стримуйте рухи, приберіть небезпечні предмети).'],
+    doNot:[], monitor:['Свідомість, дихання']},
+
+  END_FEVER_HOME:{type:'end', level:'green', call:false, title:'Температура без тривожних ознак',
+    doNow:['Пийте більше рідини, відпочивайте.','За потреби — жарознижувальне відповідно до інструкції та віку.','Зверніться до лікаря, якщо триває понад 2-3 дні або погіршується.'],
+    doNot:[], monitor:['Поява судом, порушення свідомості, утрудненого дихання — тоді негайно 103/112']},
+
+  END_CHILD_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Дитині різко стало погано',
+    doNow:['Заспокойте дитину, залишайтесь поруч.','Перевіряйте дихання постійно.'],
+    doNot:['Не залишайте дитину саму.'], monitor:['Реакція, дихання, колір шкіри']},
+
+  END_CHILD_URGENT:{type:'end', level:'urgent', call:false, title:'Дитина потребує швидкої оцінки',
+    doNow:['Пропонуйте пити маленькими ковтками.','Зверніться до педіатра/невідкладної допомоги найближчим часом.'],
+    doNot:[], monitor:['Млявість, відмова пити, температура']},
+
+  END_INFANT_EMERGENCY:{type:'end', level:'emergency', call:true, title:'Немовляті погано — критичні ознаки',
+    doNow:['Перевіряйте дихання постійно.','Заспокойте немовля, тримайте в теплі, не туго сповиваючи.'],
+    doNot:['Не залишайте немовля саме.'], monitor:['Дихання, колір шкіри, реакція']},
+
+  END_INFANT_URGENT:{type:'end', level:'urgent', call:false, title:'Немовляті потрібна швидка медична оцінка',
+    doNow:['Зверніться до педіатра/невідкладної допомоги найближчим часом.','Стежте за годуванням і кількістю мокрих підгузків (ознака зневоднення).'],
+    doNot:[], monitor:['Дихання, млявість, температура, блювання']},
+
+  END_GREEN_GENERIC:{type:'end', level:'green', call:false,
+    title:'Ознак негайної загрози за вказаними відповідями не виявлено',
+    doNow:['Спостерігайте за станом.','Зверніться до лікаря, якщо симптоми не минають або посилюються.'],
+    doNot:[], monitor:['Будь-яке погіршення — натисніть «Стан погіршився» нижче або дзвоніть 103/112']}
+};
+
+/* =========================== РУШІЙ =========================== */
+let history = [];
+let current = 'START';
+
+const mainEl = document.getElementById('main');
+const footerEl = document.getElementById('footer');
+
+function go(id){
+  history.push(current);
+  current = id;
+  render();
+}
+
+function goHome(){
+  history = [];
+  current = 'START';
+  render();
+}
+
+function goBack(){
+  if(history.length){
+    current = history.pop();
+    render();
+  }
+}
+
+document.getElementById('worsenBtn').addEventListener('click', ()=>go(PRIMARY_ENTRY));
+document.getElementById('homeBtn').addEventListener('click', goHome);
+
+function render(){
+  const node = FLOW[current];
+  footerEl.style.display = (current === 'START') ? 'none' : 'flex';
+  mainEl.innerHTML = '';
+
+  if(history.length){
+    const backRow = document.createElement('div');
+    backRow.className = 'backrow';
+    const b = document.createElement('button');
+    b.className = 'backbtn';
+    b.textContent = '← Назад';
+    b.onclick = goBack;
+    backRow.appendChild(b);
+    mainEl.appendChild(backRow);
+  }
+
+  if(!node){
+    mainEl.innerHTML += '<div class="card">Помилка сценарію. <button class="navbtn" onclick="location.reload()">Почати заново</button></div>';
+    return;
+  }
+
+  if(node.type === 'q' || node.type === 'menu'){
+    const card = document.createElement('div');
+    card.className = 'card';
+    const q = document.createElement('p');
+    q.className = 'qtext';
+    q.textContent = node.text;
+    card.appendChild(q);
+    if(node.note){
+      const n = document.createElement('p');
+      n.className = 'note';
+      n.textContent = node.note;
+      card.appendChild(n);
+    }
+    const opts = document.createElement('div');
+    opts.className = node.type === 'menu' ? 'menugrid' : 'opts';
+    node.options.forEach(o=>{
+      const btn = document.createElement('button');
+      btn.className = 'opt' + (o.cls ? ' '+o.cls : '');
+      btn.textContent = o.label;
+      btn.onclick = ()=>go(o.next);
+      opts.appendChild(btn);
+    });
+    card.appendChild(opts);
+    mainEl.appendChild(card);
+    return;
+  }
+
+  if(node.type === 'end'){
+    const box = document.createElement('div');
+    box.className = 'outcome ' + node.level;
+    const icon = node.level === 'emergency' ? '🔴' : (node.level === 'urgent' ? '🟠' : '🟢');
+    box.innerHTML = `<h2>${icon} ${node.title}</h2>`;
+
+    if(node.call){
+      const callRow = document.createElement('div');
+      callRow.className = 'callbar';
+      callRow.innerHTML = `<a class="callbtn call103" href="tel:103">📞 103</a><a class="callbtn call112" href="tel:112">📞 112</a>`;
+      box.appendChild(callRow);
+    }
+
+    if(node.doNow && node.doNow.length){
+      box.innerHTML += '<div class="section-label">Зараз</div>';
+      const ul = document.createElement('ul');
+      node.doNow.forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.appendChild(li);});
+      box.appendChild(ul);
+    }
+    if(node.doNot && node.doNot.length){
+      box.innerHTML += '<div class="section-label">Не робіть</div>';
+      const ul = document.createElement('ul');
+      node.doNot.forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.appendChild(li);});
+      box.appendChild(ul);
+    }
+    if(node.monitor && node.monitor.length){
+      box.innerHTML += '<div class="section-label">Контролюйте</div>';
+      const ul = document.createElement('ul');
+      node.monitor.forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.appendChild(li);});
+      box.appendChild(ul);
+    }
+
+    const navrow = document.createElement('div');
+    navrow.className = 'navrow';
+    const repeatBtn = document.createElement('button');
+    repeatBtn.className = 'navbtn primary';
+    repeatBtn.textContent = 'Повторити оцінку';
+    repeatBtn.onclick = ()=>go(PRIMARY_ENTRY);
+    navrow.appendChild(repeatBtn);
+    if(node.level !== 'emergency'){
+      const menuBtn = document.createElement('button');
+      menuBtn.className = 'navbtn';
+      menuBtn.textContent = 'До меню симптомів';
+      menuBtn.onclick = ()=>go(MENU_ENTRY);
+      navrow.appendChild(menuBtn);
+    }
+    box.appendChild(navrow);
+
+    const disc = document.createElement('p');
+    disc.className = 'disclaimer';
+    disc.textContent = 'Це робоча, ще не валідована медично версія алгоритму. Вона не ставить діагноз і не замінює професійну медичну допомогу.';
+    box.appendChild(disc);
+
+    mainEl.appendChild(box);
+    return;
+  }
+}
+
+render();
+</script>
+</body>
+</html>
